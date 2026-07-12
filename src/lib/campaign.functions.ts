@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText } from "ai";
+import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 
 const Input = z.object({
   audience: z.string().min(1),
@@ -23,9 +22,16 @@ export type CampaignResult = {
 export const generateCampaign = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => Input.parse(d))
   .handler(async ({ data }): Promise<CampaignResult> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("Missing LOVABLE_API_KEY");
-    const gateway = createLovableAiGatewayProvider(key);
+console.log("ENV:", Object.keys(process.env).filter(k => k.includes("GEMINI")));
+const key = process.env.GEMINI_API_KEY;
+console.log("Gemini Key:", key);
+
+if (!key) {
+  throw new Error("Missing GEMINI_API_KEY");
+}
+const ai = new GoogleGenAI({
+  apiKey: key,
+});
 
     const system = `You are Beacon, an ethical, trauma-informed campaign generator specializing in anti-human trafficking awareness.
 
@@ -61,11 +67,12 @@ Return ONLY valid JSON (no code fences) with this exact shape:
 
 Include 3-4 trusted, real resources (Polaris Project, National Human Trafficking Hotline 1-888-373-7888, DHS Blue Campaign, ECPAT, Thorn, or similar verified organizations).`;
 
-    const { text } = await generateText({
-      model: gateway("google/gemini-3-flash-preview"),
-      system,
-      prompt,
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `${system}\n\n${prompt}`,
     });
+
+    const text = response.text ?? "";
 
     // Strip potential code fences
     const cleaned = text
